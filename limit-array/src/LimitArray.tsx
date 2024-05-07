@@ -5,7 +5,7 @@ import { useCallback, useState } from "react";
 import { randomKey } from "@sanity/util/content";
 
 export const LimitArray = (props: ArrayOfObjectsInputProps) => {
-  const [currentKey, setCurrentKey] = useState<string>(randomKey(12));
+  const [currentKey, setCurrentKey] = useState<string>(randomKey(12));  
 
   const {
     schemaType: { validation = [], options, of },

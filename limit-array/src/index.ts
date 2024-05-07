@@ -1,6 +1,6 @@
-import {ArrayOfPrimitiveOptionsInput, definePlugin} from 'sanity'
+import {definePlugin} from 'sanity'
 import { LimitArray } from "./LimitArray";
-
+ 
 interface MyPluginConfig {
   /* nothing here yet */
 }

@@ -21,7 +21,6 @@ export const accessibleImageType = defineType({
   components: {
     input: ImageInput,
   },
-
   validation: (Rule) =>
     Rule.warning().custom(async (value, context) => {
       const client = context.getClient({apiVersion: "2021-03-25"});
@@ -59,4 +58,18 @@ export const accessibleImageType = defineType({
       hidden: true,
     }),
   ],
+  preview: {
+    select: {
+      media: "asset",
+      subtitle: "asset.altText",
+    },
+    prepare(selection) {
+      const {media, subtitle} = selection;
+      return {
+        title: "Photo",
+        media: media,
+        subtitle,
+      };
+    },
+  },
 });
