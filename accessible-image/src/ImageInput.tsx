@@ -1,4 +1,4 @@
-import {Button, Card, Dialog, Flex, Label, Spinner, Stack, TextInput, useToast} from "@sanity/ui";
+import {Card, Label, Spinner, Stack, TextInput, useToast} from "@sanity/ui";
 import {ComponentType, useCallback, useEffect, useState} from "react";
 import {Subscription} from "rxjs";
 import {
@@ -55,7 +55,6 @@ const ImageInput: ComponentType<ObjectInputProps<ImageValue, ObjectSchemaType>> 
 
   /** Error state used for disabling buttons in case of missing data */
   const [validationStatus, setValidationStatus] = useState(fieldsToValidate);
-
 
   const handleChange = useCallback(
     (event: string, field: string) => {
@@ -140,45 +139,47 @@ const ImageInput: ComponentType<ObjectInputProps<ImageValue, ObjectSchemaType>> 
   return (
     <>
       {props.renderDefault(props)}
-      <Stack space={3} paddingTop={3}>
-        {fields.map((field) => {
-          return (
-            <Card key={field.name}>
-              <label>
-                <Stack space={2}>
-                  <Label size={1}>{field.title}</Label>
-                  <TextInput
-                    fontSize={2}
-                    onChange={(event) => handleChange(event.currentTarget.value, field.name)}
-                    placeholder={field.title}
-                    value={sanityImage ? (sanityImage[field.name] as string) : ""}
-                    required={field.required}
-                    iconRight={
-                      isEditing ? (
-                        <div style={{paddingTop: "6px"}}>
-                          <Spinner muted />
-                        </div>
-                      ) : null
-                    }
-                    onFocus={() => setIsEditing(true)}
-                    onBlur={() => {
-                      setIsEditing(false);
-                      handleGlobalMetadataConfirm({
-                        sanityImage,
-                        toast,
-                        client,
-                        docId,
-                        changed,
-                        imagePath: pathToString(props.path),
-                      });
-                    }}
-                  />
-                </Stack>
-              </label>
-            </Card>
-          );
-        })}
-      </Stack>
+      {props.value && (
+        <Stack space={3} paddingTop={3}>
+          {fields.map((field) => {
+            return (
+              <Card key={field.name}>
+                <label>
+                  <Stack space={2}>
+                    <Label size={1}>{field.title}</Label>
+                    <TextInput
+                      fontSize={2}
+                      onChange={(event) => handleChange(event.currentTarget.value, field.name)}
+                      placeholder={field.title}
+                      value={sanityImage ? (sanityImage[field.name] as string) : ""}
+                      required={field.required}
+                      iconRight={
+                        isEditing ? (
+                          <div style={{paddingTop: "6px"}}>
+                            <Spinner muted />
+                          </div>
+                        ) : null
+                      }
+                      onFocus={() => setIsEditing(true)}
+                      onBlur={() => {
+                        setIsEditing(false);
+                        handleGlobalMetadataConfirm({
+                          sanityImage,
+                          toast,
+                          client,
+                          docId,
+                          changed,
+                          imagePath: pathToString(props.path),
+                        });
+                      }}
+                    />
+                  </Stack>
+                </label>
+              </Card>
+            );
+          })}
+        </Stack>
+      )}
     </>
   );
 };
