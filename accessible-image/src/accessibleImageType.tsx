@@ -3,6 +3,7 @@
 import {defineField, defineType} from "sanity";
 
 import ImageInput from "./ImageInput";
+import {Image} from "lucide-react";
 
 declare module "sanity" {
   export interface ImageOptions {
@@ -66,8 +67,8 @@ export const accessibleImageType = defineType({
     prepare(selection) {
       const {media, subtitle} = selection;
       return {
-        title: "Photo",
-        media: media,
+        title: "Image",
+        media: media || <Image strokeWidth={1.5} size={25} />,
         subtitle,
       };
     },
