@@ -1,4 +1,4 @@
-import {Card, Label, Spinner, Stack, TextInput, useToast} from "@sanity/ui";
+import {Box, Button, Card, Flex, Label, Spinner, Stack, TextInput, useToast} from "@sanity/ui";
 import {ComponentType, useCallback, useEffect, useState} from "react";
 import {Subscription} from "rxjs";
 import {
@@ -13,6 +13,7 @@ import {
 import {MetadataImage} from "./types";
 import {handleGlobalMetadataConfirm} from "./utils/handleGlobalMetadataConfirm";
 import {sleep} from "./utils/sleep";
+import {PublishIcon} from "@sanity/icons";
 
 const ImageInput: ComponentType<ObjectInputProps<ImageValue, ObjectSchemaType>> = (
   props: ObjectInputProps<ImageValue>,
@@ -147,32 +148,56 @@ const ImageInput: ComponentType<ObjectInputProps<ImageValue, ObjectSchemaType>> 
                 <label>
                   <Stack space={2}>
                     <Label size={1}>{field.title}</Label>
-                    <TextInput
-                      fontSize={2}
-                      onChange={(event) => handleChange(event.currentTarget.value, field.name)}
-                      placeholder={field.title}
-                      value={sanityImage ? (sanityImage[field.name] as string) : ""}
-                      required={field.required}
-                      iconRight={
-                        isEditing ? (
-                          <div style={{paddingTop: "6px"}}>
-                            <Spinner muted />
-                          </div>
-                        ) : null
-                      }
-                      onFocus={() => setIsEditing(true)}
-                      onBlur={() => {
-                        setIsEditing(false);
-                        handleGlobalMetadataConfirm({
-                          sanityImage,
-                          toast,
-                          client,
-                          docId,
-                          changed,
-                          imagePath: pathToString(props.path),
-                        });
-                      }}
-                    />
+                    <Flex gap={1} width={5} >
+                      <Box flex={1}>
+                      <TextInput
+                        style={{width: "100%"}}
+                        fontSize={2}
+                        onChange={(event) => handleChange(event.currentTarget.value, field.name)}
+                        placeholder={field.title}
+                        value={sanityImage ? (sanityImage[field.name] as string) : ""}
+                        required={field.required}
+                        iconRight={
+                          isEditing ? (
+                            <div style={{paddingTop: "6px"}}>
+                              <Spinner muted />
+                            </div>
+                          ) : null
+                        }
+                        onFocus={() => setIsEditing(true)}
+                        onBlur={() => {
+                          setIsEditing(false);
+                          handleGlobalMetadataConfirm({
+                            sanityImage,
+                            toast,
+                            client,
+                            docId,
+                            changed,
+                            imagePath: pathToString(props.path),
+                          });
+                        }}
+                        disabled={!sanityImage}
+                      />
+                      </Box>
+                      <Button
+                        fontSize={1}
+                        icon={PublishIcon}
+                        mode={"ghost"}
+                        text={"Save"}
+                        disabled={!sanityImage}
+                        onClick={() => {
+                          setIsEditing(false);
+                          handleGlobalMetadataConfirm({
+                            sanityImage,
+                            toast,
+                            client,
+                            docId,
+                            changed,
+                            imagePath: pathToString(props.path),
+                          });
+                        }}
+                      />
+                    </Flex>
                   </Stack>
                 </label>
               </Card>

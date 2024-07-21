@@ -1,11 +1,11 @@
 import { Button, Grid, Stack } from "@sanity/ui";
-import { ArrayOfObjectsInputProps, InputProps, insert, setIfMissing, useClient } from "sanity";
+import { ArrayOfObjectsInputProps, insert, setIfMissing, useClient } from "sanity";
 import { AddIcon } from "@sanity/icons";
 import { useCallback, useState } from "react";
 import { randomKey } from "@sanity/util/content";
 
-export const LimitArray = (props: ArrayOfObjectsInputProps) => {
-  const [currentKey, setCurrentKey] = useState<string>(randomKey(12));  
+export const LimitArray = (props) => {
+  const [currentKey, setCurrentKey] = useState<string>(randomKey(12));
 
   const {
     schemaType: { validation = [], options, of },
@@ -23,7 +23,7 @@ export const LimitArray = (props: ArrayOfObjectsInputProps) => {
 
   const arrayLimit: boolean[] = validationRules ? validationRules.constraint : undefined;
 
-  const arrayHasMaxElements: boolean[] = members.length >= arrayLimit ? true : false;
+  const arrayHasMaxElements: Boolean = members.length >= arrayLimit ? true : false;
 
   const handleClick = useCallback(
     async (event: React.MouseEvent<HTMLButtonElement>) => {

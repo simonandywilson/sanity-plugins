@@ -4,12 +4,12 @@ export const handleGlobalMetadataConfirm = (
   const { sanityImage, toast } = props
 
   /** Make sure there is a image _id passed down */
-  sanityImage._id
+  sanityImage?._id
     ? patchImageData(props)
     : toast.push({
       status: 'error',
       title: `No image found!`,
-      description: `Metadata was not added to the asset because there is no _id... `,
+      description: `Alt text was not added to the asset because there is no _id... `,
     })
 }
 
@@ -58,7 +58,7 @@ const patchImageData = ({
       toast.push({
         status: 'success',
         title: `Success!`,
-        description: `Metadata added to asset with the _id ${res._id}`,
+        description: `Alt text added to asset with the _id ${res._id}`,
       }),
     )
     .then(() => {
