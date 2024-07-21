@@ -157,13 +157,13 @@ const ImageInput: ComponentType<ObjectInputProps<ImageValue, ObjectSchemaType>> 
                         placeholder={field.title}
                         value={sanityImage ? (sanityImage[field.name] as string) : ""}
                         required={field.required}
-                        iconRight={
-                          isEditing ? (
-                            <div style={{paddingTop: "6px"}}>
-                              <Spinner muted />
-                            </div>
-                          ) : null
-                        }
+                        // iconRight={
+                        //   isEditing ? (
+                        //     <div style={{paddingTop: "6px"}}>
+                        //       <Spinner muted />
+                        //     </div>
+                        //   ) : null
+                        // }
                         onFocus={() => setIsEditing(true)}
                         onBlur={() => {
                           setIsEditing(false);
@@ -176,7 +176,7 @@ const ImageInput: ComponentType<ObjectInputProps<ImageValue, ObjectSchemaType>> 
                             imagePath: pathToString(props.path),
                           });
                         }}
-                        disabled={!sanityImage}
+                        // disabled={!sanityImage}
                       />
                       </Box>
                       <Button
@@ -184,7 +184,7 @@ const ImageInput: ComponentType<ObjectInputProps<ImageValue, ObjectSchemaType>> 
                         icon={PublishIcon}
                         mode={"ghost"}
                         text={"Save"}
-                        disabled={!sanityImage}
+                        // disabled={!sanityImage}
                         onClick={() => {
                           setIsEditing(false);
                           handleGlobalMetadataConfirm({
