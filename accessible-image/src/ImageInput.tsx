@@ -1,5 +1,5 @@
-import {Box, Button, Card, Flex, Label, Spinner, Stack, TextInput, useToast} from "@sanity/ui";
-import {ComponentType, useCallback, useEffect, useState} from "react";
+import {Badge, Box, Card, Flex, Inline, Stack, Text, TextInput, useToast} from "@sanity/ui";
+import {ComponentType, useCallback, useEffect, useRef, useState} from "react";
 import {Subscription} from "rxjs";
 import {
   ImageValue,
@@ -13,30 +13,62 @@ import {
 import {MetadataImage} from "./types";
 import {handleGlobalMetadataConfirm} from "./utils/handleGlobalMetadataConfirm";
 import {sleep} from "./utils/sleep";
-import {PublishIcon} from "@sanity/icons";
 
 const ImageInput: ComponentType<ObjectInputProps<ImageValue, ObjectSchemaType>> = (
   props: ObjectInputProps<ImageValue>,
 ) => {
   const requiredFields = props.schemaType?.options?.requiredFields ?? [];
+  const languages = props.schemaType?.options?.languages;
 
   const fields = [
-    // {
-    //   name: "title",
-    //   title: "Title",
-    //   required: requiredFields.some((field) => field === "title"),
-    // },
+    {
+      name: "title",
+      path: "title",
+      title: "Title",
+      required: requiredFields.some((field) => field === "title"),
+      warn: false,
+    },
+    {
+      name: "description",
+      path: "description",
+      title: "Caption",
+      required: requiredFields.some((field) => field === "description"),
+      warn: false,
+    },
     {
       name: "altText",
+      path: "altText",
       title: "Alt Text",
       required: requiredFields.some((field) => field === "altText"),
+      warn: true,
     },
-    // {
-    //   name: "description",
-    //   title: "Description",
-    //   required: requiredFields.some((field) => field === "description"),
-    // },
   ];
+
+  const languageFields = languages.map((language: string) => {
+    return [
+      {
+        name: `title.${language}`,
+        title: `Title (${language.toUpperCase()})`,
+        path: `titles.${language}`,
+        required: requiredFields.some((field) => field === "title"),
+        warn: false,
+      },
+      {
+        name: `description.${language}`,
+        title: `Caption (${language.toUpperCase()})`,
+        path: `descriptions.${language}`,
+        required: requiredFields.some((field) => field === "description"),
+        warn: false,
+      },
+      {
+        name: `altText.${language}`,
+        title: `Alt Text (${language.toUpperCase()})`,
+        path: `altTexts.${language}`,
+        required: requiredFields.some((field) => field === "altText"),
+        warn: true,
+      },
+    ];
+  });
 
   const toast = useToast();
   const docId = useFormValue(["_id"]) as string;
@@ -45,7 +77,8 @@ const ImageInput: ComponentType<ObjectInputProps<ImageValue, ObjectSchemaType>> 
   const client = useClient({apiVersion: "2023-03-25"});
 
   const [sanityImage, setSanityImage] = useState<MetadataImage>(null);
-  const [isEditing, setIsEditing] = useState(false);
+
+  const [synced, setSynced] = useState(true);
 
   const fieldsToValidate = fields.reduce((acc, field) => {
     if (field.required) {
@@ -58,27 +91,61 @@ const ImageInput: ComponentType<ObjectInputProps<ImageValue, ObjectSchemaType>> 
   const [validationStatus, setValidationStatus] = useState(fieldsToValidate);
 
   const handleChange = useCallback(
-    (event: string, field: string) => {
-      /* unset value */
-      event === ""
-        ? setSanityImage((prevSanityImage) => ({
-            ...prevSanityImage,
-            [field]: "",
-          }))
-        : setSanityImage((prevSanityImage) => ({
-            ...prevSanityImage,
-            [field]: event,
-          }));
+    (event: string, field: string, path: string) => {
+      // Set synced to false as the user is typing
+      setSynced(false);
+
+      // Update the sanityImage state with the new value
+      const newSanityImage = {...sanityImage};
+      if (path.includes(".")) {
+        const [mainField, subField] = path.split(".");
+        newSanityImage[mainField] = {
+          ...((typeof newSanityImage[mainField] === 'object' && newSanityImage[mainField]) || {}),
+          [subField]: event === "" ? "" : event,
+        };
+      } else {
+        newSanityImage[path] = event === "" ? "" : event;
+      }
+
+      setSanityImage(newSanityImage);
 
       const isFieldToValidate = fieldsToValidate[field] !== undefined;
-      isFieldToValidate &&
+      if (isFieldToValidate) {
         setValidationStatus((prevValidationStatus) => ({
           ...prevValidationStatus,
           [field]: event.trim() !== "" ? true : false,
         }));
+      }
+
+      // Debounce the function call to ensure it triggers only after typing stops
+      if (debouncedHandleGlobalMetadataConfirm.current) {
+        clearTimeout(debouncedHandleGlobalMetadataConfirm.current);
+      }
+
+      debouncedHandleGlobalMetadataConfirm.current = setTimeout(() => {
+        // Set synced to false just before running handleGlobalMetadataConfirm
+        setSynced(false);
+
+        handleGlobalMetadataConfirm(
+          {
+            sanityImage: newSanityImage, // Use the latest state
+            toast,
+            client,
+            docId,
+            changed,
+            imagePath: pathToString(props.path),
+          },
+          () => {
+            // Set synced to true after the handleGlobalMetadataConfirm has run and toast has fired
+            setSynced(true);
+          },
+        );
+      }, 1500);
     },
-    [fieldsToValidate],
+    [fieldsToValidate, sanityImage, toast, client, docId, changed, props.path],
   );
+
+  const debouncedHandleGlobalMetadataConfirm = useRef(null);
 
   useEffect(() => {
     let subscription: Subscription;
@@ -88,20 +155,20 @@ const ImageInput: ComponentType<ObjectInputProps<ImageValue, ObjectSchemaType>> 
       altText,
       title, 
       description,
+      altTexts,
+      titles,
+      descriptions,
     }`;
     const params = {imageId: imageId};
 
     const fetchReference = async (listening = false) => {
-      /** Debouncing the listener
-       */
       listening && (await sleep(1500));
 
-      /** Fetching the data */
       await client
         .fetch(query, params)
         .then((res) => {
           setSanityImage(res);
-          // check if all required fields are filled by checking if validationStatus fields have values in res
+
           const resValidationStatus = Object.entries(res).reduce((acc, [key, value]) => {
             if (value && fieldsToValidate[key] !== undefined) {
               return {...acc, [key]: true};
@@ -119,94 +186,84 @@ const ImageInput: ComponentType<ObjectInputProps<ImageValue, ObjectSchemaType>> 
     };
 
     const listen = () => {
-      // eslint-disable-next-line react-hooks/exhaustive-deps
       subscription = client
         .listen(query, params, {visibility: "query"})
         .subscribe(() => fetchReference(true));
     };
 
-    /** we only want to run the fetchReference function if we have a imageId (from the context) */
     imageId ? fetchReference().then(listen) : setSanityImage(null as any);
 
-    /** and then we need to cleanup after ourselves, so we don't get any memory leaks */
     return function cleanup() {
       if (subscription) {
         subscription.unsubscribe();
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [imageId, client]);
 
   return (
     <>
       {props.renderDefault(props)}
       {props.value && (
-        <Stack space={3} paddingTop={3}>
-          {fields.map((field) => {
-            return (
-              <Card key={field.name}>
-                <label>
-                  <Stack space={2}>
-                    <Label size={1}>{field.title}</Label>
-                    <Flex gap={1} width={5} >
-                      <Box flex={1}>
-                      <TextInput
-                        style={{width: "100%"}}
-                        fontSize={2}
-                        onChange={(event) => handleChange(event.currentTarget.value, field.name)}
-                        placeholder={field.title}
-                        value={sanityImage ? (sanityImage[field.name] as string) : ""}
-                        required={field.required}
-                        // iconRight={
-                        //   isEditing ? (
-                        //     <div style={{paddingTop: "6px"}}>
-                        //       <Spinner muted />
-                        //     </div>
-                        //   ) : null
-                        // }
-                        onFocus={() => setIsEditing(true)}
-                        onBlur={() => {
-                          setIsEditing(false);
-                          handleGlobalMetadataConfirm({
-                            sanityImage,
-                            toast,
-                            client,
-                            docId,
-                            changed,
-                            imagePath: pathToString(props.path),
-                          });
-                        }}
-                        // disabled={!sanityImage}
-                      />
-                      </Box>
-                      <Button
-                        fontSize={1}
-                        icon={PublishIcon}
-                        mode={"ghost"}
-                        text={"Save"}
-                        // disabled={!sanityImage}
-                        onClick={() => {
-                          setIsEditing(false);
-                          handleGlobalMetadataConfirm({
-                            sanityImage,
-                            toast,
-                            client,
-                            docId,
-                            changed,
-                            imagePath: pathToString(props.path),
-                          });
-                        }}
-                      />
-                    </Flex>
-                  </Stack>
-                </label>
-              </Card>
-            );
-          })}
+        <Stack space={5}>
+          <Inline space={2}>
+            <Text size={1} weight={"medium"}>
+              Image Metadata
+            </Text>
+            {synced ? (
+              <Badge tone="positive">Synced</Badge>
+            ) : (
+              <Badge tone="critical">Syncing…</Badge>
+            )}
+          </Inline>
+          <Fields fields={fields} handleChange={handleChange} sanityImage={sanityImage} />
+          <Fields
+            fields={languageFields.flat()}
+            handleChange={handleChange}
+            sanityImage={sanityImage}
+          />
         </Stack>
       )}
     </>
   );
+};
+
+const Fields = ({fields, handleChange, sanityImage}) => {
+  return fields.map((field) => {
+    if (!field.required) {
+      return null;
+    }
+    return (
+      <Card key={field.name}>
+        <label>
+          <Stack space={4}>
+            <Text size={1} weight={"medium"}>
+              {field.title}
+            </Text>
+            <Flex gap={1} width={5}>
+              <Box flex={1}>
+                <TextInput
+                  style={{width: "100%"}}
+                  fontSize={2}
+                  onChange={(event) =>
+                    handleChange(event.currentTarget.value, field.name, field.path)
+                  }
+                  placeholder={field.title}
+                  value={
+                    sanityImage
+                      ? (field.path.includes(".")
+                          ? sanityImage[field.path.split(".")[0]][field.path.split(".")[1]]
+                          : sanityImage[field.path]) ?? ""
+                      : ""
+                  }
+                  required={field.warn}
+                />
+              </Box>
+            </Flex>
+          </Stack>
+        </label>
+      </Card>
+    );
+  });
 };
 
 export default ImageInput;

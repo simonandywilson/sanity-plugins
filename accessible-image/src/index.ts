@@ -1,25 +1,86 @@
 import {defineField, definePlugin, defineType} from "sanity";
-import {accessibleImageType} from "./accessibleImageType"
+import ImageInput from "./ImageInput";
+import {ImageIcon} from "@sanity/icons";
+
+type AllowedFields = "altText" | "description" | "title";
 
 interface MyPluginConfig {
-  /* nothing here yet */
+  fields?: AllowedFields[];
+  languages?: string[];
 }
 
-// export const mediaPicker = definePlugin<MyPluginConfig | void>((config = {}) => {
-//   // eslint-disable-next-line no-console
-//   console.log('hello from sanity-plugin-media-picker CHNAGES')
-//   return {
-//     name: 'sanity-plugin-media-picker',
-//   }
-// })
+declare module "sanity" {
+  export interface ImageOptions {
+    requiredFields?: string[];
+    languages?: string[];
+  }
+}
 
+export const accessibleImage = definePlugin<MyPluginConfig>((config = {}) => {
+  const {fields = ["altText"]} = config;
 
-export const accessibleImage = definePlugin<MyPluginConfig | void>((config = {}) => {
   return {
     name: "sanity-plugin-accessible-image",
     schema: {
-      types: [accessibleImageType],
+      types: [
+        defineType({
+          name: "accessibleImage",
+          type: "image",
+          options: {
+            hotspot: true,
+            metadata: ["blurhash", "lqip", "palette"],
+            requiredFields: fields,
+            languages: ["en", "de"],
+          },
+          components: {
+            input: ImageInput,
+          },
+          validation: (Rule) =>
+            Rule.warning().custom(async (value, context) => {
+              const client = context.getClient({apiVersion: "2021-03-25"});
+              if (!value) return true;
+
+              const imageMeta = await client.fetch(
+                "*[_id == $id][0]{description, altText, title}",
+                {
+                  id: value?.asset?._ref,
+                },
+              );
+
+              const requiredFields = context?.type?.options.requiredFields;
+
+              const invalidFields = requiredFields.filter((field: string) => {
+                return imageMeta[field] === null;
+              });
+              if (invalidFields.length > 0) {
+                const message = `Please add an ${invalidFields.join(", ")} value to the image`;
+                return {valid: false, message};
+              }
+              return true;
+            }),
+          fields: [
+            defineField({
+              type: "boolean",
+              name: "changed",
+              hidden: true,
+            }),
+          ],
+          preview: {
+            select: {
+              media: "asset",
+              subtitle: "asset.altText",
+            },
+            prepare(selection) {
+              const {media, subtitle} = selection;
+              return {
+                title: "Image",
+                media: media || ImageIcon,
+                subtitle,
+              };
+            },
+          },
+        }),
+      ],
     },
-    // tools: config.tool === false ? undefined : [createStudioTool(config)],
   };
 });

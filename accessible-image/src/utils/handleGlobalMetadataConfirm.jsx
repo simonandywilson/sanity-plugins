@@ -1,15 +1,16 @@
 export const handleGlobalMetadataConfirm = (
   props,
+  callback
 ) => {
   const { sanityImage, toast } = props
 
   /** Make sure there is a image _id passed down */
   sanityImage?._id
-    ? patchImageData(props)
+    ? patchImageData(props, callback)
     : toast.push({
       status: 'error',
       title: `No image found!`,
-      description: `Alt text was not added to the asset because there is no _id... `,
+      description: `Image metadata was not added to the asset because there is no _id... `,
     })
 }
 
@@ -24,7 +25,7 @@ const patchImageData = ({
   client,
   changed,
   imagePath,
-}) => {
+}, callback) => {
   // create an object with the values that should be set
   const valuesToSet = Object.entries(sanityImage).reduce(
     (acc, [key, value]) => {
@@ -58,14 +59,17 @@ const patchImageData = ({
       toast.push({
         status: 'success',
         title: `Success!`,
-        description: `Alt text added to asset with the _id ${res._id}`,
-      }),
+        description: `Image metadata was successfully synced.`,
+      })
     )
     .then(() => {
       client
         .patch(docId)
         .set({ [`${imagePath}.changed`]: !changed })
         .commit()
+    })
+    .then(() => {
+      if (callback) callback();
     })
     .catch((err) => console.error(err))
 }

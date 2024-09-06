@@ -33,6 +33,9 @@ export interface MetadataImage extends Image {
   title?: string
   altText?: string
   description?: string
+  titles?: { [key: string]: string }
+  altTexts?: { [key: string]: string }
+  descriptions?: { [key: string]: string }
   _id: string
   imageDimensions?: ImageDimensions
   blurHashURL?: ImageMetadata['lqip']
