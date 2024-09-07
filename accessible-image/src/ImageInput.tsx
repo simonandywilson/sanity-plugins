@@ -100,7 +100,7 @@ const ImageInput: ComponentType<ObjectInputProps<ImageValue, ObjectSchemaType>> 
       if (path.includes(".")) {
         const [mainField, subField] = path.split(".");
         newSanityImage[mainField] = {
-          ...((typeof newSanityImage[mainField] === 'object' && newSanityImage[mainField]) || {}),
+          ...((newSanityImage[mainField] as Record<string, unknown>) || {}),
           [subField]: event === "" ? "" : event,
         };
       } else {
@@ -215,12 +215,15 @@ const ImageInput: ComponentType<ObjectInputProps<ImageValue, ObjectSchemaType>> 
               <Badge tone="critical">Syncing…</Badge>
             )}
           </Inline>
-          <Fields fields={fields} handleChange={handleChange} sanityImage={sanityImage} />
-          <Fields
-            fields={languageFields.flat()}
-            handleChange={handleChange}
-            sanityImage={sanityImage}
-          />
+          {languages ? (
+            <Fields
+              fields={languageFields.flat()}
+              handleChange={handleChange}
+              sanityImage={sanityImage}
+            />
+          ) : (
+            <Fields fields={fields} handleChange={handleChange} sanityImage={sanityImage} />
+          )}
         </Stack>
       )}
     </>
@@ -232,6 +235,18 @@ const Fields = ({fields, handleChange, sanityImage}) => {
     if (!field.required) {
       return null;
     }
+
+    const value = sanityImage
+      ? (() => {
+          if (field?.path?.includes(".")) {
+            const [mainField, subField] = field.path.split(".");
+            return sanityImage[mainField]?.[subField] ?? "";
+          } else {
+            return sanityImage[field?.path] ?? "";
+          }
+        })()
+      : "";
+
     return (
       <Card key={field.name}>
         <label>
@@ -248,13 +263,7 @@ const Fields = ({fields, handleChange, sanityImage}) => {
                     handleChange(event.currentTarget.value, field.name, field.path)
                   }
                   placeholder={field.title}
-                  value={
-                    sanityImage
-                      ? (field.path.includes(".")
-                          ? sanityImage[field.path.split(".")[0]][field.path.split(".")[1]]
-                          : sanityImage[field.path]) ?? ""
-                      : ""
-                  }
+                  value={value ? value : ""}
                   required={field.warn}
                 />
               </Box>
