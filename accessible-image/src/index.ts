@@ -17,7 +17,7 @@ declare module "sanity" {
 }
 
 export const accessibleImage = definePlugin<MyPluginConfig>((config = {}) => {
-  const {fields = ["altText"]} = config;  
+  const {fields = ["altText"], languages = []} = config;  
 
   return {
     name: "sanity-plugin-accessible-image",
@@ -30,7 +30,7 @@ export const accessibleImage = definePlugin<MyPluginConfig>((config = {}) => {
             hotspot: true,
             metadata: ["blurhash", "lqip", "palette"],
             requiredFields: fields,
-            languages: config.languages,
+            languages: languages,
           },
           components: {
             input: ImageInput,
@@ -69,14 +69,14 @@ export const accessibleImage = definePlugin<MyPluginConfig>((config = {}) => {
             select: {
               media: "asset",
               subtitle: "asset.altText",
-              subtitleAlt: `asset.altTexts.${config.languages[0]}`,
+              subtitleAlt: `asset.altTexts.${config.languages}`,
             },
             prepare(selection) {
               const {media, subtitle, subtitleAlt} = selection;              
               return {
                 title: "Image",
                 media: media || ImageIcon,
-                subtitle: subtitleAlt || subtitle,
+                subtitle: subtitleAlt?.length > 0 ? subtitleAlt[0] : subtitle,
               };
             },
           },

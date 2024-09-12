@@ -44,7 +44,7 @@ const ImageInput: ComponentType<ObjectInputProps<ImageValue, ObjectSchemaType>> 
     },
   ];
 
-  const languageFields = languages.map((language: string) => {
+  const languageFields = languages ? languages.map((language: string) => {
     return [
       {
         name: `title.${language}`,
@@ -68,7 +68,7 @@ const ImageInput: ComponentType<ObjectInputProps<ImageValue, ObjectSchemaType>> 
         warn: true,
       },
     ];
-  });
+  }) : [];
 
   const toast = useToast();
   const docId = useFormValue(["_id"]) as string;
@@ -204,7 +204,7 @@ const ImageInput: ComponentType<ObjectInputProps<ImageValue, ObjectSchemaType>> 
     <>
       {props.renderDefault(props)}
       {props.value && (
-        <Stack space={5}>
+        <Stack space={5} marginTop={5}>
           <Inline space={2}>
             <Text size={1} weight={"medium"}>
               Image Metadata
@@ -215,7 +215,7 @@ const ImageInput: ComponentType<ObjectInputProps<ImageValue, ObjectSchemaType>> 
               <Badge tone="critical">Syncing…</Badge>
             )}
           </Inline>
-          {languages ? (
+          {languages && languages.length > 0 ? (
             <Fields
               fields={languageFields.flat()}
               handleChange={handleChange}
