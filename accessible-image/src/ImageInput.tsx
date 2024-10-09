@@ -77,8 +77,9 @@ const ImageInput: ComponentType<ObjectInputProps<ImageValue, ObjectSchemaType>> 
   const client = useClient({apiVersion: "2023-03-25"});
 
   const [sanityImage, setSanityImage] = useState<MetadataImage>(null);
-
-  const [synced, setSynced] = useState(true);
+  const [localValues, setLocalValues] = useState({});
+  const [isSyncing, setIsSyncing] = useState(false);
+  const syncTimeoutRef = useRef(null);
 
   const fieldsToValidate = fields.reduce((acc, field) => {
     if (field.required) {
@@ -92,43 +93,45 @@ const ImageInput: ComponentType<ObjectInputProps<ImageValue, ObjectSchemaType>> 
 
   const handleChange = useCallback(
     (event: string, field: string, path: string) => {
-      // Set synced to false as the user is typing
-      setSynced(false);
+      const newValue = event === "" ? "" : event;
 
-      // Update the sanityImage state with the new value
-      const newSanityImage = {...sanityImage};
-      if (path.includes(".")) {
-        const [mainField, subField] = path.split(".");
-        newSanityImage[mainField] = {
-          ...((newSanityImage[mainField] as Record<string, unknown>) || {}),
-          [subField]: event === "" ? "" : event,
-        };
-      } else {
-        newSanityImage[path] = event === "" ? "" : event;
-      }
+      // Update local state immediately
+      setLocalValues((prev) => ({
+        ...prev,
+        [path]: newValue,
+      }));
 
-      setSanityImage(newSanityImage);
-
+      // Update validation status
       const isFieldToValidate = fieldsToValidate[field] !== undefined;
       if (isFieldToValidate) {
         setValidationStatus((prevValidationStatus) => ({
           ...prevValidationStatus,
-          [field]: event.trim() !== "" ? true : false,
+          [field]: newValue.trim() !== "",
         }));
       }
 
-      // Debounce the function call to ensure it triggers only after typing stops
-      if (debouncedHandleGlobalMetadataConfirm.current) {
-        clearTimeout(debouncedHandleGlobalMetadataConfirm.current);
+      // Clear previous timeout
+      if (syncTimeoutRef.current) {
+        clearTimeout(syncTimeoutRef.current);
       }
 
-      debouncedHandleGlobalMetadataConfirm.current = setTimeout(() => {
-        // Set synced to false just before running handleGlobalMetadataConfirm
-        setSynced(false);
+      // Set up new timeout for syncing
+      syncTimeoutRef.current = setTimeout(() => {
+        setIsSyncing(true);
+        const newSanityImage = {...sanityImage};
+        if (path.includes(".")) {
+          const [mainField, subField] = path.split(".");
+          newSanityImage[mainField] = {
+            ...((newSanityImage[mainField] as Record<string, unknown>) || {}),
+            [subField]: newValue,
+          };
+        } else {
+          newSanityImage[path] = newValue;
+        }
 
         handleGlobalMetadataConfirm(
           {
-            sanityImage: newSanityImage, // Use the latest state
+            sanityImage: newSanityImage,
             toast,
             client,
             docId,
@@ -136,16 +139,14 @@ const ImageInput: ComponentType<ObjectInputProps<ImageValue, ObjectSchemaType>> 
             imagePath: pathToString(props.path),
           },
           () => {
-            // Set synced to true after the handleGlobalMetadataConfirm has run and toast has fired
-            setSynced(true);
+            setSanityImage(newSanityImage);
+            setIsSyncing(false);
           },
         );
-      }, 1500);
+      }, 1000);
     },
     [fieldsToValidate, sanityImage, toast, client, docId, changed, props.path],
   );
-
-  const debouncedHandleGlobalMetadataConfirm = useRef(null);
 
   useEffect(() => {
     let subscription: Subscription;
@@ -209,10 +210,10 @@ const ImageInput: ComponentType<ObjectInputProps<ImageValue, ObjectSchemaType>> 
             <Text size={1} weight={"medium"}>
               Image Metadata
             </Text>
-            {synced ? (
-              <Badge tone="positive">Synced</Badge>
+            {isSyncing ? (
+              <Badge tone="caution">Syncing…</Badge>
             ) : (
-              <Badge tone="critical">Syncing…</Badge>
+              <Badge tone="positive">Synced</Badge>
             )}
           </Inline>
           {languages && languages.length > 0 ? (
@@ -220,9 +221,15 @@ const ImageInput: ComponentType<ObjectInputProps<ImageValue, ObjectSchemaType>> 
               fields={languageFields.flat()}
               handleChange={handleChange}
               sanityImage={sanityImage}
+              localValues={localValues}
             />
           ) : (
-            <Fields fields={fields} handleChange={handleChange} sanityImage={sanityImage} />
+            <Fields
+              fields={fields}
+              handleChange={handleChange}
+              sanityImage={sanityImage}
+              localValues={localValues}
+            />
           )}
         </Stack>
       )}
@@ -230,13 +237,13 @@ const ImageInput: ComponentType<ObjectInputProps<ImageValue, ObjectSchemaType>> 
   );
 };
 
-const Fields = ({fields, handleChange, sanityImage}) => {
+const Fields = ({fields, handleChange, sanityImage, localValues}) => {
   return fields.map((field) => {
     if (!field.required) {
       return null;
     }
 
-    const value = sanityImage
+    const value = localValues[field.path] ?? (sanityImage
       ? (() => {
           if (field?.path?.includes(".")) {
             const [mainField, subField] = field.path.split(".");
@@ -245,7 +252,7 @@ const Fields = ({fields, handleChange, sanityImage}) => {
             return sanityImage[field?.path] ?? "";
           }
         })()
-      : "";
+      : "");
 
     return (
       <Card key={field.name}>
