@@ -1,5 +1,5 @@
 import { Button, Grid, Stack } from "@sanity/ui";
-import { ArrayOfObjectsInputProps, insert, setIfMissing, useClient } from "sanity";
+import {  insert, setIfMissing, useClient } from "sanity";
 import { AddIcon } from "@sanity/icons";
 import { useCallback, useState } from "react";
 import { randomKey } from "@sanity/util/content";
@@ -29,6 +29,16 @@ export const LimitArray = (props) => {
     async (event: React.MouseEvent<HTMLButtonElement>) => {
       const key = randomKey(12);
       setCurrentKey(key);
+      
+      // Find the selected type from the schema
+      const selectedType = of.find(type => type.name === event.currentTarget.value);
+      
+      // Get the initial value from either the field options or type definition
+      let initialValue = options?.initialValue || selectedType?.initialValue || {};
+      if (typeof initialValue === 'function') {
+        initialValue = await initialValue();
+      }
+
       onChange([
         setIfMissing([]),
         insert(
@@ -36,6 +46,7 @@ export const LimitArray = (props) => {
             {
               _key: currentKey,
               _type: event.currentTarget.value,
+              ...initialValue
             },
           ],
           "after",
@@ -43,7 +54,7 @@ export const LimitArray = (props) => {
         ),
       ]);
     },
-    [onChange, client, currentKey],
+    [onChange, client, currentKey, of, options],
   );
 
   return arrayHasMaxElements ? (
