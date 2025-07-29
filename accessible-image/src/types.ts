@@ -1,5 +1,6 @@
 import { ToastContextValue } from '@sanity/ui'
 import { Image, ImageDimensions, ImageMetadata, SanityClient } from 'sanity'
+import React from 'react'
 /** # Image with Metadata
  *
  * extends the Sanity Image Value with metadata. 
@@ -39,6 +40,34 @@ export interface MetadataImage extends Image {
   _id: string
   imageDimensions?: ImageDimensions
   blurHashURL?: ImageMetadata['lqip']
+}
+
+/** # CustomField
+ *
+ * Configuration for custom fields that can be added to the image metadata form.
+ *
+ * @param {string} name - The field name/key used in the data structure
+ * @param {string} [title] - Display title for the field (defaults to name)
+ * @param {string} [path] - Custom path in the data structure (defaults to name)
+ * @param {string} [pluralPath] - Path for language variants (defaults to `${name}s`)
+ * @param {boolean} [warn] - Whether the field should show validation warnings (defaults to false)
+ * @param {boolean} [alwaysShow] - Whether to show the field even when not required (defaults to true)
+ * @param {boolean} [documentLevel] - Whether to store at document level instead of image asset (defaults to false)
+ * @param {string} [type] - Sanity schema type name for document-level fields (e.g., 'credit', 'array', 'string')
+ * @param {any} [schemaType] - Complete schema type definition for complex inline fields (deprecated - use 'type' instead)
+ * @param {React.ComponentType} [inputComponent] - Custom input component for complex fields
+ */
+export interface CustomField {
+  name: string
+  title?: string
+  path?: string
+  pluralPath?: string
+  warn?: boolean
+  alwaysShow?: boolean
+  documentLevel?: boolean
+  type?: string
+  schemaType?: any // Deprecated in favor of 'type'
+  inputComponent?: React.ComponentType<any>
 }
 
 /** # GlobalMetadataHandlerProps

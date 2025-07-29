@@ -1,5 +1,5 @@
-import {Badge, Box, Card, Flex, Inline, Stack, Text, TextInput, useToast} from "@sanity/ui";
-import {ComponentType, useCallback, useEffect, useRef, useState} from "react";
+import {Badge, Box, Button, Card, Flex, Inline, Stack, Text, TextInput, useToast} from "@sanity/ui";
+import {ComponentType, useCallback, useEffect, useMemo, useRef, useState} from "react";
 import {Subscription} from "rxjs";
 import {
   ImageValue,
@@ -10,15 +10,64 @@ import {
   useFormValue,
 } from "sanity";
 
-import {MetadataImage} from "./types";
+import {MetadataImage, CustomField} from "./types";
 import {handleGlobalMetadataConfirm} from "./utils/handleGlobalMetadataConfirm";
 import {sleep} from "./utils/sleep";
 
+/**
+ * ImageInput component that supports both simple and complex custom fields.
+ *
+ * Simple fields (documentLevel: false) are stored on the image asset and sync globally.
+ * Complex fields (documentLevel: true) are stored on the document level.
+ *
+ * Example usage with complex fields:
+ *
+ * ```typescript
+ * // First, define your schema type in your schema:
+ * export default defineType({
+ *   name: "credit",
+ *   title: "Credit",
+ *   type: "array",
+ *   of: [
+ *     defineArrayMember({
+ *       type: "block",
+ *       // ... your complex field definition
+ *     })
+ *   ]
+ * })
+ *
+ * // Then reference it in your custom fields:
+ * const customFields: CustomField[] = [
+ *   {
+ *     name: 'credit',
+ *     title: 'Credit',
+ *     documentLevel: true,
+ *     alwaysShow: true,
+ *     type: 'credit' // References the schema type defined above
+ *   }
+ * ]
+ *
+ * // Use in plugin:
+ * accessibleImage({
+ *   fields: ['altText', 'title'],
+ *   customFields: customFields
+ * })
+ * ```
+ */
 const ImageInput: ComponentType<ObjectInputProps<ImageValue, ObjectSchemaType>> = (
   props: ObjectInputProps<ImageValue>,
 ) => {
+  // Remove debug logging that was causing issues
   const requiredFields = props.schemaType?.options?.requiredFields ?? [];
   const languages = props.schemaType?.options?.languages;
+  const customFields: CustomField[] = props.schemaType?.options?.customFields ?? [];
+
+  // Memoize custom fields processing to prevent infinite re-renders
+  const {simpleCustomFields, complexCustomFields} = useMemo(() => {
+    const simple = customFields.filter((field) => !field.documentLevel);
+    const complex = customFields.filter((field) => field.documentLevel);
+    return {simpleCustomFields: simple, complexCustomFields: complex};
+  }, [customFields]);
 
   const fields = [
     {
@@ -42,33 +91,58 @@ const ImageInput: ComponentType<ObjectInputProps<ImageValue, ObjectSchemaType>> 
       required: requiredFields.some((field) => field === "altText"),
       warn: true,
     },
+    // Only add simple custom fields that sync to image asset (not document-level ones)
+    ...simpleCustomFields.map((customField) => ({
+      name: customField.name,
+      path: customField.path || customField.name,
+      title: customField.title || customField.name,
+      required: requiredFields.some((field) => field === customField.name),
+      warn: customField.warn ?? false,
+      alwaysShow: customField.alwaysShow ?? true,
+    })),
   ];
 
-  const languageFields = languages ? languages.map((language: string) => {
-    return [
-      {
-        name: `title.${language}`,
-        title: `Title (${language.toUpperCase()})`,
-        path: `titles.${language}`,
-        required: requiredFields.some((field) => field === "title"),
-        warn: false,
-      },
-      {
-        name: `description.${language}`,
-        title: `Caption (${language.toUpperCase()})`,
-        path: `descriptions.${language}`,
-        required: requiredFields.some((field) => field === "description"),
-        warn: false,
-      },
-      {
-        name: `altText.${language}`,
-        title: `Alt Text (${language.toUpperCase()})`,
-        path: `altTexts.${language}`,
-        required: requiredFields.some((field) => field === "altText"),
-        warn: true,
-      },
-    ];
-  }) : [];
+  const languageFields = useMemo(() => {
+    return languages
+      ? languages.map((language: string) => {
+          const baseLanguageFields = [
+            {
+              name: `title.${language}`,
+              title: `Title (${language.toUpperCase()})`,
+              path: `titles.${language}`,
+              required: requiredFields.some((field) => field === "title"),
+              warn: false,
+            },
+            {
+              name: `description.${language}`,
+              title: `Caption (${language.toUpperCase()})`,
+              path: `descriptions.${language}`,
+              required: requiredFields.some((field) => field === "description"),
+              warn: false,
+            },
+            {
+              name: `altText.${language}`,
+              title: `Alt Text (${language.toUpperCase()})`,
+              path: `altTexts.${language}`,
+              required: requiredFields.some((field) => field === "altText"),
+              warn: true,
+            },
+          ];
+
+          // Add simple custom fields for this language
+          const customLanguageFields = simpleCustomFields.map((customField) => ({
+            name: `${customField.name}.${language}`,
+            title: `${customField.title || customField.name} (${language.toUpperCase()})`,
+            path: `${customField.pluralPath || `${customField.name}s`}.${language}`,
+            required: requiredFields.some((field) => field === customField.name),
+            warn: customField.warn ?? false,
+            alwaysShow: customField.alwaysShow ?? true,
+          }));
+
+          return [...baseLanguageFields, ...customLanguageFields];
+        })
+      : [];
+  }, [languages, simpleCustomFields, requiredFields]);
 
   const toast = useToast();
   const docId = useFormValue(["_id"]) as string;
@@ -78,8 +152,9 @@ const ImageInput: ComponentType<ObjectInputProps<ImageValue, ObjectSchemaType>> 
 
   const [sanityImage, setSanityImage] = useState<MetadataImage>(null);
   const [localValues, setLocalValues] = useState({});
-  const [isSyncing, setIsSyncing] = useState(false);
-  const syncTimeoutRef = useRef(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [hasPendingChanges, setHasPendingChanges] = useState(false);
+  const pendingChangesRef = useRef({});
 
   const fieldsToValidate = fields.reduce((acc, field) => {
     if (field.required) {
@@ -91,6 +166,31 @@ const ImageInput: ComponentType<ObjectInputProps<ImageValue, ObjectSchemaType>> 
   /** Error state used for disabling buttons in case of missing data */
   const [validationStatus, setValidationStatus] = useState(fieldsToValidate);
 
+  const handleSave = useCallback(() => {
+    if (!hasPendingChanges || isSaving) return;
+
+    setIsSaving(true);
+    const newSanityImage = {...sanityImage, ...pendingChangesRef.current};
+
+    handleGlobalMetadataConfirm(
+      {
+        sanityImage: newSanityImage,
+        toast,
+        client,
+        docId,
+        changed,
+        imagePath: pathToString(props.path),
+      },
+      () => {
+        setSanityImage(newSanityImage);
+        setLocalValues({});
+        pendingChangesRef.current = {};
+        setHasPendingChanges(false);
+        setIsSaving(false);
+      },
+    );
+  }, [hasPendingChanges, isSaving, sanityImage, toast, client, docId, changed, props.path]);
+
   const handleChange = useCallback(
     (event: string, field: string, path: string) => {
       const newValue = event === "" ? "" : event;
@@ -101,6 +201,20 @@ const ImageInput: ComponentType<ObjectInputProps<ImageValue, ObjectSchemaType>> 
         [path]: newValue,
       }));
 
+      // Update pending changes
+      const updatedPendingChanges = {...pendingChangesRef.current};
+      if (path.includes(".")) {
+        const [mainField, subField] = path.split(".");
+        updatedPendingChanges[mainField] = {
+          ...((updatedPendingChanges[mainField] as Record<string, unknown>) || {}),
+          [subField]: newValue,
+        };
+      } else {
+        updatedPendingChanges[path] = newValue;
+      }
+      pendingChangesRef.current = updatedPendingChanges;
+      setHasPendingChanges(true);
+
       // Update validation status
       const isFieldToValidate = fieldsToValidate[field] !== undefined;
       if (isFieldToValidate) {
@@ -109,26 +223,15 @@ const ImageInput: ComponentType<ObjectInputProps<ImageValue, ObjectSchemaType>> 
           [field]: newValue.trim() !== "",
         }));
       }
+    },
+    [fieldsToValidate],
+  );
 
-      // Clear previous timeout
-      if (syncTimeoutRef.current) {
-        clearTimeout(syncTimeoutRef.current);
-      }
-
-      // Set up new timeout for syncing
-      syncTimeoutRef.current = setTimeout(() => {
-        setIsSyncing(true);
-        const newSanityImage = {...sanityImage};
-        if (path.includes(".")) {
-          const [mainField, subField] = path.split(".");
-          newSanityImage[mainField] = {
-            ...((newSanityImage[mainField] as Record<string, unknown>) || {}),
-            [subField]: newValue,
-          };
-        } else {
-          newSanityImage[path] = newValue;
-        }
-
+  // Auto-save on component unmount
+  useEffect(() => {
+    return () => {
+      if (hasPendingChanges && sanityImage && Object.keys(pendingChangesRef.current).length > 0) {
+        const newSanityImage = {...sanityImage, ...pendingChangesRef.current};
         handleGlobalMetadataConfirm(
           {
             sanityImage: newSanityImage,
@@ -138,27 +241,39 @@ const ImageInput: ComponentType<ObjectInputProps<ImageValue, ObjectSchemaType>> 
             changed,
             imagePath: pathToString(props.path),
           },
-          () => {
-            setSanityImage(newSanityImage);
-            setIsSyncing(false);
-          },
+          () => {},
         );
-      }, 1000);
-    },
-    [fieldsToValidate, sanityImage, toast, client, docId, changed, props.path],
-  );
+      }
+    };
+  }, [hasPendingChanges, sanityImage, toast, client, docId, changed, props.path]);
 
   useEffect(() => {
     let subscription: Subscription;
 
+    // Build dynamic query fields including only simple custom fields (complex ones are document-level)
+    const customFieldsQuery = simpleCustomFields
+      .map((field) => field.path || field.name)
+      .join(", ");
+    const customFieldsPluralQuery = simpleCustomFields
+      .map((field) => field.pluralPath || `${field.name}s`)
+      .join(", ");
+
+    const queryFields = [
+      "_id",
+      "altText",
+      "title",
+      "description",
+      "altTexts",
+      "titles",
+      "descriptions",
+      ...(simpleCustomFields.length > 0 ? [customFieldsQuery] : []),
+      ...(languages && simpleCustomFields.length > 0 ? [customFieldsPluralQuery] : []),
+    ]
+      .filter(Boolean)
+      .join(", ");
+
     const query = `*[_type == "sanity.imageAsset" && _id == $imageId ][0]{
-      _id,
-      altText,
-      title, 
-      description,
-      altTexts,
-      titles,
-      descriptions,
+      ${queryFields}
     }`;
     const params = {imageId: imageId};
 
@@ -199,29 +314,32 @@ const ImageInput: ComponentType<ObjectInputProps<ImageValue, ObjectSchemaType>> 
         subscription.unsubscribe();
       }
     };
-  }, [imageId, client]);
+  }, [imageId, client, simpleCustomFields, languages]);
 
   return (
     <>
       {props.renderDefault(props)}
       {props.value && (
-        <Stack space={5} marginTop={5}>
-          <Inline space={2}>
-            <Text size={1} weight={"medium"}>
-              Image Metadata
-            </Text>
-            {isSyncing ? (
-              <Badge tone="caution">Syncing…</Badge>
-            ) : (
-              <Badge tone="positive">Synced</Badge>
-            )}
-          </Inline>
+        <Stack space={5}>
+          {requiredFields.length > 1 && (
+            <SaveButton
+              title="Image Metadata"
+              isSaving={isSaving}
+              hasPendingChanges={hasPendingChanges}
+              handleSave={handleSave}
+            />
+          )}
+
           {languages && languages.length > 0 ? (
             <Fields
               fields={languageFields.flat()}
               handleChange={handleChange}
               sanityImage={sanityImage}
               localValues={localValues}
+              isSaving={isSaving}
+              hasPendingChanges={hasPendingChanges}
+              handleSave={handleSave}
+              showSaveButton={requiredFields.length === 1}
             />
           ) : (
             <Fields
@@ -229,7 +347,22 @@ const ImageInput: ComponentType<ObjectInputProps<ImageValue, ObjectSchemaType>> 
               handleChange={handleChange}
               sanityImage={sanityImage}
               localValues={localValues}
+              isSaving={isSaving}
+              hasPendingChanges={hasPendingChanges}
+              handleSave={handleSave}
+              showSaveButton={requiredFields.length === 1}
             />
+          )}
+
+          {/* Render complex custom fields at document level - these appear below standard fields */}
+          {complexCustomFields.length > 0 && (
+            <Stack space={4} marginTop={0}>
+              <ComplexFields
+                customFields={complexCustomFields}
+                props={props}
+                requiredFields={requiredFields}
+              />
+            </Stack>
           )}
         </Stack>
       )}
@@ -237,30 +370,59 @@ const ImageInput: ComponentType<ObjectInputProps<ImageValue, ObjectSchemaType>> 
   );
 };
 
-const Fields = ({fields, handleChange, sanityImage, localValues}) => {
+const Fields = ({
+  fields,
+  handleChange,
+  sanityImage,
+  localValues,
+  isSaving,
+  hasPendingChanges,
+  handleSave,
+  showSaveButton,
+}) => {
+  let isFirstVisibleField = true;
+  
   return fields.map((field) => {
-    if (!field.required) {
+    // Show field if it's required OR if it's a custom field with alwaysShow=true
+    const shouldShow = field.required || field.alwaysShow;
+
+    if (!shouldShow) {
       return null;
     }
 
-    const value = localValues[field.path] ?? (sanityImage
-      ? (() => {
-          if (field?.path?.includes(".")) {
-            const [mainField, subField] = field.path.split(".");
-            return sanityImage[mainField]?.[subField] ?? "";
-          } else {
-            return sanityImage[field?.path] ?? "";
-          }
-        })()
-      : "");
+    const value =
+      localValues[field.path] ??
+      (sanityImage
+        ? (() => {
+            if (field?.path?.includes(".")) {
+              const [mainField, subField] = field.path.split(".");
+              return sanityImage[mainField]?.[subField] ?? "";
+            } else {
+              return sanityImage[field?.path] ?? "";
+            }
+          })()
+        : "");
+
+    // Only show save button on the first visible field
+    const showSaveOnThisField = showSaveButton && isFirstVisibleField;
+    isFirstVisibleField = false; // Mark that we've seen the first field
 
     return (
       <Card key={field.name}>
         <label>
-          <Stack space={4}>
-            <Text size={1} weight={"medium"}>
-              {field.title}
-            </Text>
+          <Stack space={showSaveOnThisField ? 3 : 4}>
+            {!showSaveOnThisField ? (
+              <Text size={1} weight={"medium"}>
+                {field.title}
+              </Text>
+            ) : (
+              <SaveButton
+                title={field.title}
+                isSaving={isSaving}
+                hasPendingChanges={hasPendingChanges}
+                handleSave={handleSave}
+              />
+            )}
             <Flex gap={1} width={5}>
               <Box flex={1}>
                 <TextInput
@@ -280,6 +442,89 @@ const Fields = ({fields, handleChange, sanityImage, localValues}) => {
       </Card>
     );
   });
+};
+
+const ComplexFields = ({customFields, props, requiredFields}) => {
+  return customFields.map((field) => {
+    const shouldShow = field.required || field.alwaysShow;
+
+    if (!shouldShow) {
+      return null;
+    }
+
+    const fieldName = field.path || field.name;
+    const fieldPath = [...props.path, fieldName];
+    const fieldValue = props.value?.[fieldName];
+
+    // Find the registered schema field
+    const schemaField = props.schemaType.fields?.find((f) => f.name === fieldName);
+
+    if (!schemaField) {
+      console.warn(`Custom field "${fieldName}" not found in schema fields`);
+      return null;
+    }
+
+    const InputComponent = field.inputComponent;
+
+    return (
+      <Card key={field.name}>
+        <Stack space={4}>
+          <Text size={1} weight={"medium"}>
+            {field.title || field.name}
+          </Text>
+          {InputComponent ? (
+            <InputComponent
+              {...props}
+              path={fieldPath}
+              schemaType={schemaField.type}
+              value={fieldValue}
+            />
+          ) : (
+            props.renderInput({
+              ...props,
+              path: fieldPath,
+              schemaType: schemaField.type,
+              value: fieldValue,
+              focused: false,
+              readOnly: props.readOnly || false,
+              presence: [],
+              validation: [],
+              level: (props.level || 0) + 1,
+            })
+          )}
+        </Stack>
+      </Card>
+    );
+  });
+};
+
+const SaveButton = ({title, isSaving, hasPendingChanges, handleSave}) => {
+  return (
+    <Flex justify={"space-between"} align={"center"} style={{height: "25px"}}>
+      <Inline space={2}>
+        <Text size={1} weight={"medium"}>
+          {title}
+        </Text>
+        {isSaving ? (
+          <Badge tone="caution">Saving…</Badge>
+        ) : hasPendingChanges ? (
+          <Badge tone="critical">Unsaved</Badge>
+        ) : (
+          <Badge tone="positive">Saved</Badge>
+        )}
+      </Inline>
+      {hasPendingChanges && (
+        <Button
+          tone="primary"
+          text="Save"
+          onClick={handleSave}
+          disabled={isSaving}
+          fontSize={1}
+          padding={2}
+        />
+      )}
+    </Flex>
+  );
 };
 
 export default ImageInput;
