@@ -38,6 +38,16 @@ export const accessibleImage = definePlugin<MyPluginConfig>((config = {}) => {
             languages: languages,
             customFields: customFields,
           },
+          fieldsets:[
+            {
+              name: "custom",
+              title: "Custom Fields",
+              options: {
+                collapsible: true,
+                collapsed: true,
+              },
+            },
+          ],
           components: {
             input: ImageInput,
           },
@@ -64,7 +74,7 @@ export const accessibleImage = definePlugin<MyPluginConfig>((config = {}) => {
                   return !value?.[customField.path || customField.name];
                 } else {
                   // For asset-level fields, check the image metadata
-                  return imageMeta[field] === null;
+                return imageMeta[field] === null;
                 }
               });
               if (invalidFields.length > 0) {
@@ -80,14 +90,15 @@ export const accessibleImage = definePlugin<MyPluginConfig>((config = {}) => {
               hidden: true,
             }),
             // Add custom document-level fields as references to existing schema types
-            // Hide them from default rendering since we handle them in our custom input
+            // Only hide fields that don't have a fieldset - fields with fieldsets should show in default form
             ...customFields
               .filter(field => field.documentLevel)
               .map(field => defineField({
                 name: field.path || field.name,
                 title: field.title || field.name,
                 type: field.type || field.schemaType?.type || 'string',
-                hidden: true, // Hide from default rendering to prevent duplication
+                fieldset: field.fieldset, // Assign to specified fieldset
+                hidden: !field.fieldset, // Only hide if no fieldset specified
                 ...(field.schemaType && !field.type ? field.schemaType : {}),
               })),
           ],

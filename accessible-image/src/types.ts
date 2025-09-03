@@ -56,6 +56,7 @@ export interface MetadataImage extends Image {
  * @param {string} [type] - Sanity schema type name for document-level fields (e.g., 'credit', 'array', 'string')
  * @param {any} [schemaType] - Complete schema type definition for complex inline fields (deprecated - use 'type' instead)
  * @param {React.ComponentType} [inputComponent] - Custom input component for complex fields
+ * @param {string} [fieldset] - Fieldset name to group the field under in the schema
  */
 export interface CustomField {
   name: string
@@ -68,6 +69,7 @@ export interface CustomField {
   type?: string
   schemaType?: any // Deprecated in favor of 'type'
   inputComponent?: React.ComponentType<any>
+  fieldset?: string
 }
 
 /** # GlobalMetadataHandlerProps

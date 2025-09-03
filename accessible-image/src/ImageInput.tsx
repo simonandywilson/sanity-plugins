@@ -10,49 +10,12 @@ import {
   useFormValue,
 } from "sanity";
 
-import {MetadataImage, CustomField} from "./types";
+import {MetadataImage} from "./types";
 import {handleGlobalMetadataConfirm} from "./utils/handleGlobalMetadataConfirm";
 import {sleep} from "./utils/sleep";
 
 /**
- * ImageInput component that supports both simple and complex custom fields.
- *
- * Simple fields (documentLevel: false) are stored on the image asset and sync globally.
- * Complex fields (documentLevel: true) are stored on the document level.
- *
- * Example usage with complex fields:
- *
- * ```typescript
- * // First, define your schema type in your schema:
- * export default defineType({
- *   name: "credit",
- *   title: "Credit",
- *   type: "array",
- *   of: [
- *     defineArrayMember({
- *       type: "block",
- *       // ... your complex field definition
- *     })
- *   ]
- * })
- *
- * // Then reference it in your custom fields:
- * const customFields: CustomField[] = [
- *   {
- *     name: 'credit',
- *     title: 'Credit',
- *     documentLevel: true,
- *     alwaysShow: true,
- *     type: 'credit' // References the schema type defined above
- *   }
- * ]
- *
- * // Use in plugin:
- * accessibleImage({
- *   fields: ['altText', 'title'],
- *   customFields: customFields
- * })
- * ```
+ * ImageInput component for accessible images with altText, title, and description fields.
  */
 const ImageInput: ComponentType<ObjectInputProps<ImageValue, ObjectSchemaType>> = (
   props: ObjectInputProps<ImageValue>,
@@ -60,14 +23,6 @@ const ImageInput: ComponentType<ObjectInputProps<ImageValue, ObjectSchemaType>> 
   // Remove debug logging that was causing issues
   const requiredFields = props.schemaType?.options?.requiredFields ?? [];
   const languages = props.schemaType?.options?.languages;
-  const customFields: CustomField[] = props.schemaType?.options?.customFields ?? [];
-
-  // Memoize custom fields processing to prevent infinite re-renders
-  const {simpleCustomFields, complexCustomFields} = useMemo(() => {
-    const simple = customFields.filter((field) => !field.documentLevel);
-    const complex = customFields.filter((field) => field.documentLevel);
-    return {simpleCustomFields: simple, complexCustomFields: complex};
-  }, [customFields]);
 
   const fields = [
     {
@@ -91,58 +46,35 @@ const ImageInput: ComponentType<ObjectInputProps<ImageValue, ObjectSchemaType>> 
       required: requiredFields.some((field) => field === "altText"),
       warn: true,
     },
-    // Only add simple custom fields that sync to image asset (not document-level ones)
-    ...simpleCustomFields.map((customField) => ({
-      name: customField.name,
-      path: customField.path || customField.name,
-      title: customField.title || customField.name,
-      required: requiredFields.some((field) => field === customField.name),
-      warn: customField.warn ?? false,
-      alwaysShow: customField.alwaysShow ?? true,
-    })),
   ];
 
   const languageFields = useMemo(() => {
     return languages
-      ? languages.map((language: string) => {
-          const baseLanguageFields = [
-            {
-              name: `title.${language}`,
-              title: `Title (${language.toUpperCase()})`,
-              path: `titles.${language}`,
-              required: requiredFields.some((field) => field === "title"),
-              warn: false,
-            },
-            {
-              name: `description.${language}`,
-              title: `Caption (${language.toUpperCase()})`,
-              path: `descriptions.${language}`,
-              required: requiredFields.some((field) => field === "description"),
-              warn: false,
-            },
-            {
-              name: `altText.${language}`,
-              title: `Alt Text (${language.toUpperCase()})`,
-              path: `altTexts.${language}`,
-              required: requiredFields.some((field) => field === "altText"),
-              warn: true,
-            },
-          ];
-
-          // Add simple custom fields for this language
-          const customLanguageFields = simpleCustomFields.map((customField) => ({
-            name: `${customField.name}.${language}`,
-            title: `${customField.title || customField.name} (${language.toUpperCase()})`,
-            path: `${customField.pluralPath || `${customField.name}s`}.${language}`,
-            required: requiredFields.some((field) => field === customField.name),
-            warn: customField.warn ?? false,
-            alwaysShow: customField.alwaysShow ?? true,
-          }));
-
-          return [...baseLanguageFields, ...customLanguageFields];
-        })
+      ? languages.map((language: string) => [
+          {
+            name: `title.${language}`,
+            title: `Title (${language.toUpperCase()})`,
+            path: `titles.${language}`,
+            required: requiredFields.some((field) => field === "title"),
+            warn: false,
+          },
+          {
+            name: `description.${language}`,
+            title: `Caption (${language.toUpperCase()})`,
+            path: `descriptions.${language}`,
+            required: requiredFields.some((field) => field === "description"),
+            warn: false,
+          },
+          {
+            name: `altText.${language}`,
+            title: `Alt Text (${language.toUpperCase()})`,
+            path: `altTexts.${language}`,
+            required: requiredFields.some((field) => field === "altText"),
+            warn: true,
+          },
+        ])
       : [];
-  }, [languages, simpleCustomFields, requiredFields]);
+  }, [languages, requiredFields]);
 
   const toast = useToast();
   const docId = useFormValue(["_id"]) as string;
@@ -250,14 +182,6 @@ const ImageInput: ComponentType<ObjectInputProps<ImageValue, ObjectSchemaType>> 
   useEffect(() => {
     let subscription: Subscription;
 
-    // Build dynamic query fields including only simple custom fields (complex ones are document-level)
-    const customFieldsQuery = simpleCustomFields
-      .map((field) => field.path || field.name)
-      .join(", ");
-    const customFieldsPluralQuery = simpleCustomFields
-      .map((field) => field.pluralPath || `${field.name}s`)
-      .join(", ");
-
     const queryFields = [
       "_id",
       "altText",
@@ -266,11 +190,7 @@ const ImageInput: ComponentType<ObjectInputProps<ImageValue, ObjectSchemaType>> 
       "altTexts",
       "titles",
       "descriptions",
-      ...(simpleCustomFields.length > 0 ? [customFieldsQuery] : []),
-      ...(languages && simpleCustomFields.length > 0 ? [customFieldsPluralQuery] : []),
-    ]
-      .filter(Boolean)
-      .join(", ");
+    ].join(", ");
 
     const query = `*[_type == "sanity.imageAsset" && _id == $imageId ][0]{
       ${queryFields}
@@ -314,13 +234,13 @@ const ImageInput: ComponentType<ObjectInputProps<ImageValue, ObjectSchemaType>> 
         subscription.unsubscribe();
       }
     };
-  }, [imageId, client, simpleCustomFields, languages]);
+  }, [imageId, client, languages]);
 
   return (
-    <>
+    <Stack space={3}>
       {props.renderDefault(props)}
       {props.value && (
-        <Stack space={5}>
+        <Stack space={3}>
           {requiredFields.length > 1 && (
             <SaveButton
               title="Image Metadata"
@@ -340,6 +260,7 @@ const ImageInput: ComponentType<ObjectInputProps<ImageValue, ObjectSchemaType>> 
               hasPendingChanges={hasPendingChanges}
               handleSave={handleSave}
               showSaveButton={requiredFields.length === 1}
+              requiredFields={requiredFields}
             />
           ) : (
             <Fields
@@ -351,22 +272,14 @@ const ImageInput: ComponentType<ObjectInputProps<ImageValue, ObjectSchemaType>> 
               hasPendingChanges={hasPendingChanges}
               handleSave={handleSave}
               showSaveButton={requiredFields.length === 1}
+              requiredFields={requiredFields}
             />
           )}
 
-          {/* Render complex custom fields at document level - these appear below standard fields */}
-          {complexCustomFields.length > 0 && (
-            <Stack space={4} marginTop={0}>
-              <ComplexFields
-                customFields={complexCustomFields}
-                props={props}
-                requiredFields={requiredFields}
-              />
-            </Stack>
-          )}
+
         </Stack>
       )}
-    </>
+    </Stack>
   );
 };
 
@@ -379,12 +292,13 @@ const Fields = ({
   hasPendingChanges,
   handleSave,
   showSaveButton,
+  requiredFields,
 }) => {
   let isFirstVisibleField = true;
   
-  return fields.map((field) => {
-    // Show field if it's required OR if it's a custom field with alwaysShow=true
-    const shouldShow = field.required || field.alwaysShow;
+  const fieldElements = fields.map((field) => {
+    // Show field if it's required
+    const shouldShow = field.required;
 
     if (!shouldShow) {
       return null;
@@ -410,7 +324,7 @@ const Fields = ({
     return (
       <Card key={field.name}>
         <label>
-          <Stack space={showSaveOnThisField ? 3 : 4}>
+          <Stack space={3} >
             {!showSaveOnThisField ? (
               <Text size={1} weight={"medium"}>
                 {field.title}
@@ -433,7 +347,11 @@ const Fields = ({
                   }
                   placeholder={field.title}
                   value={value ? value : ""}
-                  required={field.warn}
+                  customValidity={
+                    field.warn && field.required && (!value || value.trim() === "")
+                      ? `${field.title} is required`
+                      : undefined
+                  }
                 />
               </Box>
             </Flex>
@@ -441,62 +359,12 @@ const Fields = ({
         </label>
       </Card>
     );
-  });
+  }).filter(Boolean);
+
+  return fieldElements;
 };
 
-const ComplexFields = ({customFields, props, requiredFields}) => {
-  return customFields.map((field) => {
-    const shouldShow = field.required || field.alwaysShow;
 
-    if (!shouldShow) {
-      return null;
-    }
-
-    const fieldName = field.path || field.name;
-    const fieldPath = [...props.path, fieldName];
-    const fieldValue = props.value?.[fieldName];
-
-    // Find the registered schema field
-    const schemaField = props.schemaType.fields?.find((f) => f.name === fieldName);
-
-    if (!schemaField) {
-      console.warn(`Custom field "${fieldName}" not found in schema fields`);
-      return null;
-    }
-
-    const InputComponent = field.inputComponent;
-
-    return (
-      <Card key={field.name}>
-        <Stack space={4}>
-          <Text size={1} weight={"medium"}>
-            {field.title || field.name}
-          </Text>
-          {InputComponent ? (
-            <InputComponent
-              {...props}
-              path={fieldPath}
-              schemaType={schemaField.type}
-              value={fieldValue}
-            />
-          ) : (
-            props.renderInput({
-              ...props,
-              path: fieldPath,
-              schemaType: schemaField.type,
-              value: fieldValue,
-              focused: false,
-              readOnly: props.readOnly || false,
-              presence: [],
-              validation: [],
-              level: (props.level || 0) + 1,
-            })
-          )}
-        </Stack>
-      </Card>
-    );
-  });
-};
 
 const SaveButton = ({title, isSaving, hasPendingChanges, handleSave}) => {
   return (
