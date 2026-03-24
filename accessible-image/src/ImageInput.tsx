@@ -1,4 +1,5 @@
-import {Badge, Box, Button, Card, Flex, Inline, Stack, Text, TextInput, useToast} from "@sanity/ui";
+import {Badge, Box, Button, Card, Flex, Inline, Spinner, Stack, Text, TextInput, useToast} from "@sanity/ui";
+import {SparkleIcon, SparklesIcon} from "@sanity/icons";
 import {ComponentType, useCallback, useEffect, useMemo, useRef, useState} from "react";
 import {Subscription} from "rxjs";
 import {
@@ -9,10 +10,19 @@ import {
   useClient,
   useFormValue,
 } from "sanity";
+import imageUrlBuilder from "@sanity/image-url";
 
 import {MetadataImage} from "./types";
 import {handleGlobalMetadataConfirm} from "./utils/handleGlobalMetadataConfirm";
 import {sleep} from "./utils/sleep";
+import {generateAltText, type AIProvider} from "./altTextGenerator/generateAltText";
+
+interface AISettings {
+  provider: AIProvider;
+  apiKey: string;
+  model: string;
+  globalContext?: string;
+}
 
 /**
  * ImageInput component for accessible images with altText, title, and description fields.
@@ -87,6 +97,9 @@ const ImageInput: ComponentType<ObjectInputProps<ImageValue, ObjectSchemaType>> 
   const [isSaving, setIsSaving] = useState(false);
   const [hasPendingChanges, setHasPendingChanges] = useState(false);
   const pendingChangesRef = useRef({});
+  const [aiSettings, setAiSettings] = useState<AISettings | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const builder = imageUrlBuilder(client);
 
   const fieldsToValidate = fields.reduce((acc, field) => {
     if (field.required) {
@@ -99,7 +112,7 @@ const ImageInput: ComponentType<ObjectInputProps<ImageValue, ObjectSchemaType>> 
   const [validationStatus, setValidationStatus] = useState(fieldsToValidate);
 
   const handleSave = useCallback(() => {
-    if (!hasPendingChanges || isSaving) return;
+    if (!hasPendingChanges || isSaving || !sanityImage?._id) return;
 
     setIsSaving(true);
     const newSanityImage = {...sanityImage, ...pendingChangesRef.current};
@@ -178,6 +191,46 @@ const ImageInput: ComponentType<ObjectInputProps<ImageValue, ObjectSchemaType>> 
       }
     };
   }, [hasPendingChanges, sanityImage, toast, client, docId, changed, props.path]);
+
+  // Fetch AI settings to show inline generate button
+  useEffect(() => {
+    client
+      .fetch<AISettings | null>(
+        `*[_id == "altTextGeneratorSettings"][0]{ provider, apiKey, model, globalContext }`,
+      )
+      .then((settings) => {
+        if (settings?.apiKey) setAiSettings(settings);
+      })
+      .catch(() => {});
+  }, [client]);
+
+  const handleGenerate = useCallback(
+    async (fieldName: string, fieldPath: string) => {
+      if (!aiSettings || !imageId || isGenerating) return;
+
+      setIsGenerating(true);
+      try {
+        const imageUrl = builder.image(imageId).width(800).url();
+        const altText = await generateAltText({
+          imageUrl,
+          apiKey: aiSettings.apiKey,
+          model: aiSettings.model,
+          provider: aiSettings.provider,
+          context: aiSettings.globalContext,
+        });
+        handleChange(altText, fieldName, fieldPath);
+      } catch (error: any) {
+        toast.push({
+          status: "error",
+          title: "Generation failed",
+          description: error.message,
+        });
+      } finally {
+        setIsGenerating(false);
+      }
+    },
+    [aiSettings, imageId, isGenerating, builder, handleChange, toast],
+  );
 
   useEffect(() => {
     let subscription: Subscription;
@@ -261,6 +314,9 @@ const ImageInput: ComponentType<ObjectInputProps<ImageValue, ObjectSchemaType>> 
               handleSave={handleSave}
               showSaveButton={requiredFields.length === 1}
               requiredFields={requiredFields}
+              aiSettings={aiSettings}
+              isGenerating={isGenerating}
+              handleGenerate={handleGenerate}
             />
           ) : (
             <Fields
@@ -273,6 +329,9 @@ const ImageInput: ComponentType<ObjectInputProps<ImageValue, ObjectSchemaType>> 
               handleSave={handleSave}
               showSaveButton={requiredFields.length === 1}
               requiredFields={requiredFields}
+              aiSettings={aiSettings}
+              isGenerating={isGenerating}
+              handleGenerate={handleGenerate}
             />
           )}
 
@@ -293,6 +352,9 @@ const Fields = ({
   handleSave,
   showSaveButton,
   requiredFields,
+  aiSettings,
+  isGenerating,
+  handleGenerate,
 }) => {
   let isFirstVisibleField = true;
   
@@ -354,6 +416,19 @@ const Fields = ({
                   }
                 />
               </Box>
+              {field.warn && aiSettings && (
+                <Button
+                  icon={isGenerating ? Spinner : SparkleIcon}
+                  mode="ghost"
+                  tone="primary"
+                  title="Generate with AI"
+                  onClick={() => handleGenerate(field.name, field.path)}
+                  disabled={isGenerating}
+                  padding={2}
+                  fontSize={1}
+                  style={{aspectRatio: "1/1"}}
+                />
+              )}
             </Flex>
           </Stack>
         </label>

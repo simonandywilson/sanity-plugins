@@ -1,7 +1,8 @@
 import {defineField, definePlugin, defineType} from "sanity";
 import ImageInput from "./ImageInput";
-import {ImageIcon} from "@sanity/icons";
+import {ImageIcon, SparklesIcon} from "@sanity/icons";
 import {CustomField} from "./types";
+import {AltTextGeneratorTool} from "./altTextGenerator/AltTextGeneratorTool";
 
 type AllowedFields = "altText" | "description" | "title";
 
@@ -9,6 +10,8 @@ interface MyPluginConfig {
   fields?: AllowedFields[];
   languages?: string[];
   customFields?: CustomField[];
+  /** Enable the AI Alt Text Generator studio tool. Defaults to false. */
+  aiAltTextGenerator?: boolean;
 }
 
 declare module "sanity" {
@@ -22,10 +25,20 @@ declare module "sanity" {
 export type {CustomField} from "./types";
 
 export const accessibleImage = definePlugin<MyPluginConfig>((config = {}) => {
-  const {fields = ["altText"], languages = [], customFields = []} = config;  
+  const {fields = ["altText"], languages = [], customFields = [], aiAltTextGenerator = true} = config;
 
   return {
     name: "sanity-plugin-accessible-image",
+    tools: aiAltTextGenerator
+      ? [
+          {
+            name: "ai-alt-text",
+            title: "AI Alt Text",
+            icon: SparklesIcon,
+            component: AltTextGeneratorTool,
+          },
+        ]
+      : [],
     schema: {
       types: [
         defineType({
@@ -37,6 +50,7 @@ export const accessibleImage = definePlugin<MyPluginConfig>((config = {}) => {
             requiredFields: fields,
             languages: languages,
             customFields: customFields,
+            accept: "image/*",
           },
           fieldsets:[
             {
