@@ -1,6 +1,6 @@
 {
   "name": "sanity-plugin-limit-array",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Remove the default + Add item button when an array reaches its item limit.",
   "keywords": [
     "sanity",
