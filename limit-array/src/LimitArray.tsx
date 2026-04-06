@@ -1,41 +1,32 @@
 import { Button, Grid, Stack } from "@sanity/ui";
-import {  insert, setIfMissing, useClient } from "sanity";
+import { insert, setIfMissing } from "sanity";
 import { AddIcon } from "@sanity/icons";
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
 import { randomKey } from "@sanity/util/content";
 
 export const LimitArray = (props) => {
-  const [currentKey, setCurrentKey] = useState<string>(randomKey(12));
-
   const {
     schemaType: { validation = [], options, of },
     members,
     onChange,
   } = props;
 
-  const client = useClient({ apiVersion: `2023-04-01` });
-
-  const showAsButtons: boolean[] = options?.showAsButtons;
+  const showAsButtons: boolean = options?.showAsButtons;
 
   const validationRules = validation
-    .flatMap((rule: { _rules: any }) => rule._rules)
+    .flatMap((rule: { _rules: { flag: string; constraint: number }[] }) => rule._rules)
     .find((rule: { flag: string }) => rule.flag === "max");
 
-  const arrayLimit: boolean[] = validationRules ? validationRules.constraint : undefined;
+  const arrayLimit: number | undefined = validationRules ? validationRules.constraint : undefined;
 
-  const arrayHasMaxElements: Boolean = members.length >= arrayLimit ? true : false;
+  const arrayHasMaxElements: boolean = members.length >= arrayLimit;
 
   const handleClick = useCallback(
     async (event: React.MouseEvent<HTMLButtonElement>) => {
-      const key = randomKey(12);
-      setCurrentKey(key);
-      
-      // Find the selected type from the schema
-      const selectedType = of.find(type => type.name === event.currentTarget.value);
-      
-      // Get the initial value from either the field options or type definition
+      const selectedType = of.find((type) => type.name === event.currentTarget.value);
+
       let initialValue = options?.initialValue || selectedType?.initialValue || {};
-      if (typeof initialValue === 'function') {
+      if (typeof initialValue === "function") {
         initialValue = await initialValue();
       }
 
@@ -44,9 +35,9 @@ export const LimitArray = (props) => {
         insert(
           [
             {
-              _key: currentKey,
+              _key: randomKey(12),
               _type: event.currentTarget.value,
-              ...initialValue
+              ...initialValue,
             },
           ],
           "after",
@@ -54,7 +45,7 @@ export const LimitArray = (props) => {
         ),
       ]);
     },
-    [onChange, client, currentKey, of, options],
+    [onChange, of, options],
   );
 
   return arrayHasMaxElements ? (

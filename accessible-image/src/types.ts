@@ -3,21 +3,21 @@ import { Image, ImageDimensions, ImageMetadata, SanityClient } from 'sanity'
 import React from 'react'
 /** # Image with Metadata
  *
- * extends the Sanity Image Value with metadata. 
+ * extends the Sanity Image Value with metadata.
  * Use the same type in your front end, if you want to use the metadata.
  * Use the extendedQuery to get all the metadata from the image asset.
  *
- * @param {MetadataImage['_id']} _id is the alt text of the image and used as the _ref in image fields
- * @param {MetadataImage['title']} title is the alt text (set by media browser)
- * @param {MetadataImage['altText']} altText is the alt text (set by media browser)
- * @param {MetadataImage['description']} description is the description (set by media browser)
- * @param {MetadataImage['imageDimensions']} imageDimensions are the dimensions of the image
- * @param {Image['blurHashURL']} blurHashURL is the lqip string of the image metadata
- * @param {Image['asset']} asset is the asset of the image 
+ * @param _id - the alt text of the image and used as the _ref in image fields
+ * @param title - the alt text (set by media browser)
+ * @param altText - the alt text (set by media browser)
+ * @param description - the description (set by media browser)
+ * @param imageDimensions - the dimensions of the image
+ * @param blurHashURL - the lqip string of the image metadata
+ * @param asset - the asset of the image
  * @see {@link Image} - Sanity Image
- * 
- * ---- 
- * 
+ *
+ * ----
+ *
  * ## Sanity Image Type:
  *
  * ```ts
@@ -46,17 +46,17 @@ export interface MetadataImage extends Image {
  *
  * Configuration for custom fields that can be added to the image metadata form.
  *
- * @param {string} name - The field name/key used in the data structure
- * @param {string} [title] - Display title for the field (defaults to name)
- * @param {string} [path] - Custom path in the data structure (defaults to name)
- * @param {string} [pluralPath] - Path for language variants (defaults to `${name}s`)
- * @param {boolean} [warn] - Whether the field should show validation warnings (defaults to false)
- * @param {boolean} [alwaysShow] - Whether to show the field even when not required (defaults to true)
- * @param {boolean} [documentLevel] - Whether to store at document level instead of image asset (defaults to false)
- * @param {string} [type] - Sanity schema type name for document-level fields (e.g., 'credit', 'array', 'string')
- * @param {any} [schemaType] - Complete schema type definition for complex inline fields (deprecated - use 'type' instead)
- * @param {React.ComponentType} [inputComponent] - Custom input component for complex fields
- * @param {string} [fieldset] - Fieldset name to group the field under in the schema
+ * @param name - The field name/key used in the data structure
+ * @param title - Display title for the field (defaults to name)
+ * @param path - Custom path in the data structure (defaults to name)
+ * @param pluralPath - Path for language variants (defaults to `${name}s`)
+ * @param warn - Whether the field should show validation warnings (defaults to false)
+ * @param alwaysShow - Whether to show the field even when not required (defaults to true)
+ * @param documentLevel - Whether to store at document level instead of image asset (defaults to false)
+ * @param type - Sanity schema type name for document-level fields (e.g., 'credit', 'array', 'string')
+ * @param schemaType - Complete schema type definition for complex inline fields (deprecated - use 'type' instead)
+ * @param inputComponent - Custom input component for complex fields
+ * @param fieldset - Fieldset name to group the field under in the schema
  */
 export interface CustomField {
   name: string
@@ -76,14 +76,13 @@ export interface CustomField {
  *
  * This is the type of the props passed to the global metadata handler.
  *
- * @param {MetadataImage} sanityImage is the image object with metadata
- * @param {ToastContextValue} toast is the toast context from the Sanity UI
- * @param {SanityClient} client is the Sanity client
- * @param {() => void} onClose is the function to close the dialog
- * @param {string} docId is the document id of the document that contains the image
- * @param {boolean} changed is a boolean that indicates if the image has changed
- * @param {string} imagePath is the path to the image
- *
+ * @param sanityImage - the image object with metadata
+ * @param toast - the toast context from the Sanity UI
+ * @param client - the Sanity client
+ * @param onClose - the function to close the dialog
+ * @param docId - the document id of the document that contains the image
+ * @param changed - indicates if the image has changed
+ * @param imagePath - the path to the image
  */
 export interface GlobalMetadataHandlerProps {
   sanityImage: MetadataImage

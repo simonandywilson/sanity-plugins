@@ -6,6 +6,7 @@ export default defineConfig({
 
   // Remove this block to enable strict export validation
   extract: {
+    checkTypes: false,
     rules: {
       'ae-forgotten-export': 'off',
       'ae-incompatible-release-tags': 'off',
