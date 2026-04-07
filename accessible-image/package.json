@@ -1,6 +1,6 @@
 {
   "name": "sanity-plugin-accessible-image",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "Expanding default sanity image field with accessible alt-text field",
   "keywords": [
     "sanity",
