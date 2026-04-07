@@ -216,7 +216,16 @@ export function AccessibleColourInput(props: ObjectInputProps): ReactElement {
     return namedColour ? titleCase(namedColour) : ''
   }, [colour])
   const swatchNamePlaceholder = swatchName || colourName || colour
-  const swatchLabel = storedSwatchName || swatchNamePlaceholder
+  const effectiveSwatchName = storedSwatchName || swatchNamePlaceholder
+  const swatchLabel = effectiveSwatchName
+
+  useEffect(() => {
+    if (storedSwatchName || !currentHex || !HEX_COLOUR_PATTERN.test(currentHex)) {
+      return
+    }
+
+    onChange(set(toColourValue(currentHex, effectiveSwatchName)))
+  }, [currentHex, effectiveSwatchName, onChange, storedSwatchName])
 
   const handleChange = useCallback(
     (nextValue: string) => {
@@ -226,13 +235,13 @@ export function AccessibleColourInput(props: ObjectInputProps): ReactElement {
       }
 
       if (!HEX_COLOUR_PATTERN.test(nextValue)) {
-        onChange(set({hex: nextValue, swatchName: storedSwatchName}))
+        onChange(set({hex: nextValue, swatchName: effectiveSwatchName}))
         return
       }
 
-      onChange(set(toColourValue(nextValue, storedSwatchName)))
+      onChange(set(toColourValue(nextValue, effectiveSwatchName)))
     },
-    [onChange, storedSwatchName],
+    [effectiveSwatchName, onChange],
   )
 
   const togglePicker = useCallback(() => {
